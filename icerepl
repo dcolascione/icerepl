@@ -1,0 +1,208 @@
+#!/usr/bin/python3
+import json, struct, sys, atexit, os
+from socket import socket, AF_UNIX, SOCK_STREAM
+from argparse import ArgumentParser
+from configparser import ConfigParser
+
+class JsError(Exception): pass
+
+def write_blob(stream, value):
+    stream.write(struct.pack('<I', len(value)))
+    stream.write(value)
+
+def read_blob(stream):
+    (sz,) = struct.unpack('<I', stream.read(4))
+    return from_moz.read(sz)
+
+def evaljs(js, **kwargs):
+    request = { 'code' : js }
+    request.update(kwargs)
+    enc = json.dumps(request).encode('utf-8')
+    write_blob(to_moz, enc)
+    to_moz.flush()
+    reply = json.loads(read_blob(from_moz).decode('utf-8'))
+    return reply
+
+def evaljs_or_die(js, **kwargs):
+    reply = evaljs(js, **kwargs)
+    if 'error' in reply:
+        raise JsError(reply['error'])
+    return reply['value']
+
+def run_repl():
+    import readline
+
+    if hasattr(readline, 'read_history_file'):
+        histfile=os.path.expanduser('~/.icerepl-history')
+        try:
+            readline.read_history_file(histfile)
+        except IOError:
+            pass
+        def save_history():
+            readline.write_history_file(histfile)
+        atexit.register(save_history)
+
+    while True:
+        try:
+            line = input('> ')
+        except EOFError:
+            return
+
+        reply = evaljs(line.strip(), coerceToString=False)
+        if 'value' in reply:
+            print(reply['value'])
+        elif 'error' in reply:
+            print('ERROR: ' + reply['error'])
+        else:
+            raise JsError('protocol error')
+
+def do_getPref(pref):
+    code = '''
+(function() {
+  var pref = REQUEST.pref;
+  var ps = Cc['@mozilla.org/preferences-service;1']
+    .getService(Components.interfaces.nsIPrefBranch)
+    .QueryInterface(Ci.nsIPrefBranch);
+  switch(ps.getPrefType(pref)) {
+    case ps.PREF_STRING:
+      return ps.getCharPref(pref);
+    case ps.PREF_INT:
+      return ps.getIntPref(pref);
+    case ps.PREF_BOOL:
+      return ps.getBoolPref(pref);
+    case ps.PREF_INVALID:
+      throw new Error('pref does not exist');
+    default:
+      throw new Error('unknown pref type');
+  }
+})();
+'''
+    print(evaljs_or_die(code, pref=pref))
+
+def do_setPref(pref, value):
+    code = '''
+(function() {
+  var pref = REQUEST.pref;
+  var value = REQUEST.value;
+  var ps = Cc['@mozilla.org/preferences-service;1']
+    .getService(Components.interfaces.nsIPrefBranch)
+    .QueryInterface(Ci.nsIPrefBranch);
+  switch(ps.getPrefType(pref)) {
+    case ps.PREF_STRING:
+      ps.setCharPref(pref, value);
+      break;
+    case ps.PREF_INT:
+      ps.setIntPref(pref);
+      break;
+    case ps.PREF_BOOL:
+      ps.setBoolPref(pref);
+      break;
+    case ps.PREF_INVALID:
+      throw new Error('pref does not exist');
+    default:
+      throw new Error('unknown pref type');
+  }
+})();
+'''
+    print(evaljs_or_die(code, pref=pref, value=value))
+
+def do_eval(expr):
+    print(evaljs_or_die(expr))
+
+def die(fmt, *args):
+    sys.stderr.write(('icerepl: error: ' + fmt + '\n') % args)
+    sys.exit(1)
+
+def find_profile_dir(args):
+    if args.profile_directory:
+        return args.profile_directory
+
+    program = 'firefox'
+    if args.program is not None:
+        program = args.program
+
+    pdir = None
+    if program == 'firefox':
+        pdir = os.path.expanduser('~/.mozilla/firefox')
+    elif program == 'thunderbird':
+        pdir = os.path.expanduser('~/.thunderbird')
+    else:
+        die('unknown program %r', program)
+
+    pini = ConfigParser(interpolation=None,
+                        default_section='General')
+    pini.read(pdir + '/profiles.ini')
+
+    profile = None
+    for section_name in pini.sections():
+        section = pini[section_name]
+        if args.profile is None and section.get('default') == '1':
+            profile = section
+            break
+
+        if section['name'] == args.profile:
+            profile = section
+            break
+
+    if profile is None:
+        die('could not find profile %r', args.profile)
+
+    if profile['IsRelative'] == '1':
+        profile_dir = pdir + '/' + profile['Path']
+    else:
+        profile_dir = profile['Path']
+
+    return profile_dir
+
+def main():
+    global from_moz
+    global to_moz
+
+    p = ArgumentParser(description='Remotely control Mozilla products')
+    p.add_argument('--profile', '-P',
+                   help='Connect to the instance of PROGRAM started with '
+                   'the given profile.')
+    p.add_argument('--program', '-t',
+                   help='Connect to program (default: Firefox)')
+    p.add_argument('--profile-directory', '-d',
+                   help='Explicitly specify profile directory')
+
+    subparsers = p.add_subparsers(dest='action')
+    p_repl = subparsers.add_parser('repl')
+    p_getPref = subparsers.add_parser('getPref')
+    p_getPref.add_argument('pref')
+    p_setPref = subparsers.add_parser('setPref')
+    p_setPref.add_argument('pref')
+    p_setPref.add_argument('value')
+    p_eval = subparsers.add_parser('eval')
+    p_eval.add_argument('expr')
+
+    args = p.parse_args()
+
+    profile_dir = find_profile_dir(args)
+
+    conn_sock = socket(AF_UNIX, SOCK_STREAM)
+    conn_sock.connect(profile_dir + '/icerepl.socket')
+    from_moz = conn_sock.makefile('rb')
+    to_moz = conn_sock.makefile('wb')
+
+    if args.action == 'repl':
+        run_repl()
+    elif args.action == 'getPref':
+        do_getPref(args.pref)
+    elif args.action == 'setPref':
+        do_setPref(args.pref, args.value)
+    elif args.action == 'eval':
+        do_eval(args.expr)
+    else:
+        die('no action given')
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as ex:
+        if os.getenv("ICEREPL_RAISE_EXCEPTIONS"):
+            raise
+
+        sys.stdout.write('icerepl: error: %s\n' % ex)
+        sys.exit(1)

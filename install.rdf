@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+
+<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:em="http://www.mozilla.org/2004/em-rdf#">
+
+  <Description about="urn:mozilla:install-manifest">
+    <em:id>icerepl@dancol.org</em:id>
+    <em:name>IceRepl</em:name>
+    <em:version>1.0</em:version>
+    <em:creator>Daniel Colascione</em:creator>
+    <em:multiprocessCompatible>true</em:multiprocessCompatible>
+    <em:description>Remotely Control this program</em:description>
+
+    <!-- We support systems that support AF_UNIX -->
+    <em:targetPlatform>Linux</em:targetPlatform>
+    <em:targetPlatform>Darwin</em:targetPlatform>
+    <em:targetPlatform>SunOS</em:targetPlatform>
+    <em:targetPlatform>FreeBSD</em:targetPlatform>
+    <em:targetPlatform>OpenBSD</em:targetPlatform>
+    <em:targetPlatform>DragonFly</em:targetPlatform>
+
+    <!-- Firefox -->
+    <em:targetApplication>
+      <Description>
+        <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
+        <em:minVersion>31.0</em:minVersion>
+        <em:maxVersion>34.*</em:maxVersion>
+      </Description>
+    </em:targetApplication>
+
+    <!-- Thunderbird -->
+    <em:targetApplication>
+      <Description>
+        <em:id>{3550f703-e582-4d05-9a08-453d09bdfdc6}</em:id>
+        <em:minVersion>31.0</em:minVersion>
+        <em:maxVersion>31.*</em:maxVersion>
+      </Description>
+    </em:targetApplication>
+  </Description>
+</RDF>

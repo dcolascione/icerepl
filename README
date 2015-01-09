@@ -1,0 +1,9 @@
+This Firefox and Thunderbird extension provides a minimal remote
+control facility, which includes a JavaScript REPL.  Instead of
+listening for a telnet connection like mozrepl, icerepl binds to an
+AF_UNIX socket in each Mozilla profile directory and accepts commands
+from the icerepl Python client.  Configuration is automatic and
+secure.
+
+Icerepl has commands for evaluating JavaScript expressions, changing
+preferences, and starting a readline-enabled interactive shell.
