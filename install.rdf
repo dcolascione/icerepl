@@ -9,7 +9,7 @@
     <em:version>1.0</em:version>
     <em:creator>Daniel Colascione</em:creator>
     <em:multiprocessCompatible>true</em:multiprocessCompatible>
-    <em:description>Remotely Control this program</em:description>
+    <em:description>Remotely control this program</em:description>
 
     <!-- We support systems that support AF_UNIX -->
     <em:targetPlatform>Linux</em:targetPlatform>
