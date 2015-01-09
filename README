@@ -7,3 +7,7 @@ secure.
 
 Icerepl has commands for evaluating JavaScript expressions, changing
 preferences, and starting a readline-enabled interactive shell.
+
+To install, run mkxpi.sh and install that into Firefox and Thunderbird
+using "Tools->Add-ons->Wrench->Install Add-On From File...".  Put the
+icerepl Python script anywhere.  It requires Python 3.
